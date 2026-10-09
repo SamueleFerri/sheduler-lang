@@ -6,9 +6,12 @@ package it.unibo.spe.mdd.sheduler.validation;
 
 import it.unibo.spe.mdd.sheduler.TimeUtils;
 import it.unibo.spe.mdd.sheduler.sheduler.*;
+import org.eclipse.emf.common.util.Pool;
 import org.eclipse.xtext.validation.Check;
 import org.eclipse.xtext.validation.CheckType;
 
+import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -51,6 +54,11 @@ public class ShedulerValidator extends AbstractShedulerValidator {
         // TODO Ex 1.1c: if any of the two throws ArithmeticException (overflow), report a warning on
         //               ShedulerPackage.Literals.RELATIVE_TIME__TIME_SPANS, whose message contains "not representable"
         //               (try it with `in 2147483647 years`)
+        try {
+            TimeUtils.toDuration(relativeTime).toMillis();
+        }catch (ArithmeticException e) {
+            warning("not representable", relativeTime, ShedulerPackage.Literals.RELATIVE_TIME__TIME_SPANS);
+        }
     }
 
     @Check
@@ -62,6 +70,11 @@ public class ShedulerValidator extends AbstractShedulerValidator {
         //               may overflow too (ArithmeticException)
         // TODO Ex 1.2d: in all such cases, report a warning on ShedulerPackage.Literals.ABSOLUTE_TIME__DATE,
         //               whose message contains "not representable"
+        try {
+            Duration.between(LocalDateTime.now(), TimeUtils.toLocalDateTime(absoluteTime)).toMillis();
+        } catch (DateTimeException | ArithmeticException e) {
+            warning("not representable", absoluteTime, ShedulerPackage.Literals.ABSOLUTE_TIME__DATE);
+        }
     }
 
     @Check
@@ -70,6 +83,15 @@ public class ShedulerValidator extends AbstractShedulerValidator {
         //               (invalid dates are already reported by other rules)
         // TODO Ex 1.3b: if it is NOT after LocalDateTime.now() (i.e. past or present), report a warning
         //               on ShedulerPackage.Literals.ABSOLUTE_TIME__TIME, whose message contains "future"
+        LocalDateTime dateTime;
+        try {
+            dateTime = TimeUtils.toLocalDateTime(absoluteTime);
+        } catch (DateTimeException e) {
+            return;
+        }
+        if(!dateTime.isAfter(LocalDateTime.now())){
+            warning("future", absoluteTime, ShedulerPackage.Literals.ABSOLUTE_TIME__TIME);
+        }
     }
 
     @Check(CheckType.FAST)
@@ -80,6 +102,21 @@ public class ShedulerValidator extends AbstractShedulerValidator {
         // TODO Ex 1.4c: error on CLOCK_TIME__SECOND if second > 59
         // TODO Ex 1.4d: error on CLOCK_TIME__MILLISECOND if millisecond > 999
         // TODO Ex 1.4e: error on CLOCK_TIME__NANOSECOND if nanosecond > 999
+        if (clockTime.getHour() > 23) {
+            error("hour", clockTime, ShedulerPackage.Literals.CLOCK_TIME__HOUR);
+        }
+        if (clockTime.getMinute() > 59) {
+            error("minute", clockTime, ShedulerPackage.Literals.CLOCK_TIME__MINUTE);
+        }
+        if (clockTime.getSecond() > 59) {
+            error("second", clockTime, ShedulerPackage.Literals.CLOCK_TIME__SECOND);
+        }
+        if (clockTime.getMillisecond() > 999) {
+            error("millisecond", clockTime, ShedulerPackage.Literals.CLOCK_TIME__MILLISECOND);
+        }
+        if (clockTime.getNanosecond() > 999) {
+            error("nanosecond", clockTime, ShedulerPackage.Literals.CLOCK_TIME__NANOSECOND);
+        }
     }
 
     @Check(CheckType.FAST)
@@ -87,6 +124,9 @@ public class ShedulerValidator extends AbstractShedulerValidator {
         // TODO Ex 1.5: error on TIME_SPAN__DURATION if the duration is zero or negative
         //              (message containing "strictly positive")
         //              NOTE: do not add upper bounds, `repeat every 48 hours` is perfectly fine
+        if (timeSpan.getDuration() < 1) {
+            error("strictly positive", timeSpan, ShedulerPackage.Literals.TIME_SPAN__DURATION);
+        }
     }
 
     @Check(CheckType.FAST)
@@ -94,17 +134,32 @@ public class ShedulerValidator extends AbstractShedulerValidator {
         // TODO Ex 1.6a: iterate over pool.getTasks(), skipping anonymous ones (getName() == null)
         // TODO Ex 1.6b: keep the names seen so far in a Set<String> (hint: Set.add returns false for duplicates)
         // TODO Ex 1.6c: error on the duplicate task, feature TASK__NAME, message "Repeated task ID: <name>"
+        Set<String> names = new HashSet<>();
+        for (Task t : pool.getTasks()) {
+            if(t.getName() != null || !names.add(t.getName())) {
+                error("Repeated task ID: " + t.getName(), t, ShedulerPackage.Literals.TASK__NAME);
+            }
+        }
     }
 
     @Check(CheckType.FAST)
     public void ensurePoolNamesAreUniqueWithinPool(TaskPoolSet pools) {
         // TODO Ex 1.7: same as Ex 1.6, but for pools (feature TASK_POOL__NAME, message "Repeated pool ID: <name>")
+        Set<String> names = new HashSet<>();
+        for (TaskPool pool : pools.getPools()) {
+            if(pool.getName() != null || !names.add(pool.getName())) {
+                error("Repeated pool ID: " + pool.getName(), pool, ShedulerPackage.Literals.TASK_POOL__NAME);
+            }
+        }
     }
 
     @Check(CheckType.FAST)
     public void ensureDependentTasksAreNotPeriodic(Task task) {
         // TODO Ex 1.8: error on TASK__PERIOD if the task is scheduled before/after another task
         //              (getBefore() or getAfter() not null) AND it has a period (message containing "cannot be periodic")
+        if ((task.getBefore() == null || task.getAfter() == null) && task.getPeriod() != null) {
+            error("cannot be periodic", task, ShedulerPackage.Literals.TASK__PERIOD);
+        }
     }
 
     @Check
