@@ -34,6 +34,17 @@ public class ShedulerScopeProvider extends AbstractShedulerScopeProvider {
         // TODO Ex 2d: ...and except the task itself (a task cannot be scheduled before/after itself)
         // TODO Ex 2e: wrap the candidates into an IScope via Scopes.scopeFor(...), and return it
         // otherwise, fall back to the default scoping:
+        if (context instanceof Task) {
+            if (Set.of(ShedulerPackage.Literals.TASK__AFTER, ShedulerPackage.Literals.TASK__BEFORE).contains(reference)) {
+                TaskPool pool = EcoreUtil2.getContainerOfType(context, TaskPool.class);
+                return Scopes.scopeFor(
+                        pool.getTasks().stream()
+                                .filter(it -> it.getName() != null)
+                                .filter(it -> !context.equals(it))
+                                .toList()
+                );
+            }
+        }
         return super.getScope(context, reference);
     }
 }
